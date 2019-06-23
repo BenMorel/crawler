@@ -2,7 +2,6 @@
 
 namespace Spatie\Crawler;
 
-use Tree\Node\Node;
 use GuzzleHttp\Psr7\Uri;
 use InvalidArgumentException;
 use Psr\Http\Message\UriInterface;
@@ -19,7 +18,7 @@ class LinkAdder
         $this->crawler = $crawler;
     }
 
-    public function addFromHtml(string $html, UriInterface $foundOnUrl)
+    public function addFromHtml(string $html, UriInterface $foundOnUrl, int $depth)
     {
         $allLinks = $this->extractLinksFromHtml($html, $foundOnUrl);
 
@@ -30,22 +29,26 @@ class LinkAdder
             ->map(function (UriInterface $url) {
                 return $this->normalizeUrl($url);
             })
-            ->filter(function (UriInterface $url) use ($foundOnUrl) {
-                if (! $node = $this->crawler->addToDepthTree($url, $foundOnUrl)) {
-                    return false;
+            ->filter(function (UriInterface $url) use ($foundOnUrl, $depth) {
+                $maximumDepth = $this->crawler->getMaximumDepth();
+
+                if ($maximumDepth !== null) {
+                    if ($depth + 1 > $maximumDepth) {
+                        return false;
+                    }
                 }
 
-                return $this->shouldCrawl($node);
+                return $this->shouldCrawl((string) $url, $depth + 1);
             })
             ->filter(function (UriInterface $url) {
                 return strpos($url->getPath(), '/tel:') === false;
             })
-            ->each(function (UriInterface $url) use ($foundOnUrl) {
+            ->each(function (UriInterface $url) use ($foundOnUrl, $depth) {
                 if ($this->crawler->maximumCrawlCountReached()) {
                     return;
                 }
 
-                $crawlUrl = CrawlUrl::create($url, $foundOnUrl);
+                $crawlUrl = CrawlUrl::create($url, $foundOnUrl, null, $depth + 1);
 
                 $this->crawler->addToCrawlQueue($crawlUrl);
             });
@@ -85,9 +88,9 @@ class LinkAdder
         return $url->withFragment('');
     }
 
-    protected function shouldCrawl(Node $node): bool
+    protected function shouldCrawl(string $url, int $depth): bool
     {
-        if ($this->crawler->mustRespectRobots() && ! $this->crawler->getRobotsTxt()->allows($node->getValue())) {
+        if ($this->crawler->mustRespectRobots() && ! $this->crawler->getRobotsTxt()->allows($url)) {
             return false;
         }
 
@@ -97,6 +100,6 @@ class LinkAdder
             return true;
         }
 
-        return $node->getDepth() <= $maximumDepth;
+        return $depth <= $maximumDepth;
     }
 }

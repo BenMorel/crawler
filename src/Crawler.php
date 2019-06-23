@@ -3,7 +3,6 @@
 namespace Spatie\Crawler;
 
 use Generator;
-use Tree\Node\Node;
 use GuzzleHttp\Pool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Uri;
@@ -52,9 +51,6 @@ class Crawler
 
     /** @var bool */
     protected $respectRobots = true;
-
-    /** @var \Tree\Node\Node */
-    protected $depthTree;
 
     /** @var bool */
     protected $executeJavaScript = false;
@@ -346,42 +342,11 @@ class Crawler
             $this->addToCrawlQueue($crawlUrl);
         }
 
-        $this->depthTree = new Node((string) $this->baseUrl);
-
         $this->startCrawlingQueue();
 
         foreach ($this->crawlObservers as $crawlObserver) {
             $crawlObserver->finishedCrawling();
         }
-    }
-
-    public function addToDepthTree(UriInterface $url, UriInterface $parentUrl, Node $node = null): ?Node
-    {
-        if (is_null($this->maximumDepth)) {
-            return new Node((string) $url);
-        }
-
-        $node = $node ?? $this->depthTree;
-
-        $returnNode = null;
-
-        if ($node->getValue() === (string) $parentUrl) {
-            $newNode = new Node((string) $url);
-
-            $node->addChild($newNode);
-
-            return $newNode;
-        }
-
-        foreach ($node->getChildren() as $currentNode) {
-            $returnNode = $this->addToDepthTree($url, $parentUrl, $currentNode);
-
-            if (! is_null($returnNode)) {
-                break;
-            }
-        }
-
-        return $returnNode;
     }
 
     protected function startCrawlingQueue()
